@@ -14,8 +14,15 @@
  *
  */
 
+
 #ifndef _LINUX_SYNAPTICS_I2C_RMI_H
 #define _LINUX_SYNAPTICS_I2C_RMI_H
+
+
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+#include <linux/input.h>
+#endif
+
 
 #define SYNAPTICS_I2C_RMI_NAME "synaptics-rmi-ts"
 #define SYNAPTICS_T1007_NAME "synaptics-t1007"
@@ -25,7 +32,8 @@
 #define SYNAPTICS_3200_NAME "synaptics-3200"
 #define SYNAPTICS_FW_3_2_PACKRAT 1115999
 #define SYNAPTICS_FW_NOCAL_PACKRAT 1293981
-#define SYNAPTICS_FW_2IN1_PACKRAT 1396865
+
+
 
 
 #define SYN_CONFIG_SIZE 32 * 16
@@ -34,9 +42,11 @@
 #define SYN_F01DATA_BASEADDR 0x0013
 #define SYN_PROCESS_ERR -1
 
+
 #define SYN_AND_REPORT_TYPE_A		0
 #define	SYN_AND_REPORT_TYPE_B		1
 #define SYN_AND_REPORT_TYPE_HTC		2
+
 
 #define TAP_DX_OUTER		0
 #define TAP_DY_OUTER		1
@@ -44,15 +54,16 @@
 #define TAP_DX_INTER		3
 #define TAP_DY_INTER		4
 
+
 #define CUS_REG_SIZE		4
 #define CUS_REG_BASE		0
 #define CUS_BALLISTICS_CTRL	1
 #define CUS_LAND_CTRL		2
 #define CUS_LIFT_CTRL		3
 
+
 #define SENSOR_ID_CHECKING_EN	1 << 16
-#define PSENSOR_STATUS		0x03
-#define PHONE_STATUS		0x04
+
 
 enum {
 	SYNAPTICS_FLIP_X = 1UL << 0,
@@ -61,10 +72,12 @@ enum {
 	SYNAPTICS_SNAP_TO_INACTIVE_EDGE = 1UL << 3,
 };
 
+
 enum {
 	FINGER_1_REPORT = 1 << 0,
 	FINGER_2_REPORT = 1 << 1,
 };
+
 
 struct synaptics_virtual_key {
 	int index;
@@ -75,10 +88,13 @@ struct synaptics_virtual_key {
 	int y_range_max;
 };
 
+
 struct synaptics_i2c_rmi_platform_data {
 	uint32_t version;	
-				
-				
+
+
+
+
 	int (*power)(int on);	
 	int (*lpm_power)(int on);
 	struct synaptics_virtual_key *virtual_key;
@@ -141,14 +157,15 @@ struct synaptics_i2c_rmi_platform_data {
 	uint8_t multitouch_calibration;
 	uint8_t psensor_detection;
 	uint8_t PixelTouchThreshold_bef_unlock;
-	uint8_t block_touch_time_near;
-	uint8_t block_touch_time_far;
+	uint16_t block_touch_time_near;
 };
+
 
 struct page_description {
 	uint8_t addr;
 	uint8_t value;
 };
+
 
 struct syn_finger_data {
 	int x;
@@ -156,6 +173,7 @@ struct syn_finger_data {
 	int w;
 	int z;
 };
+
 
 struct function_t {
 	uint8_t function_type;
@@ -174,5 +192,12 @@ enum {
 	FUNCTION
 };
 
+
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+extern void sweep2wake_setdev(struct input_dev * input_device);
+#endif
+
+
 extern uint8_t getPowerKeyState(void);
-#endif 
+#endif
+

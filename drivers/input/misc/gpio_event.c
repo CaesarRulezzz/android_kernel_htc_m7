@@ -13,6 +13,7 @@
  *
  */
 
+
 #include <linux/earlysuspend.h>
 #include <linux/module.h>
 #include <linux/input.h>
@@ -20,15 +21,20 @@
 #include <linux/hrtimer.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
-#include <mach/board_htc.h>
+
+
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+#include <linux/synaptics_i2c_rmi.h>
+#endif
+
 
 struct gpio_event {
 	struct gpio_event_input_devs *input_devs;
 	const struct gpio_event_platform_data *info;
 	struct early_suspend early_suspend;
 	void *state[0];
-	uint8_t rrm1_mode;
 };
+
 
 static int gpio_input_event(
 	struct input_dev *dev, unsigned int type, unsigned int code, int value)
@@ -40,6 +46,7 @@ static int gpio_input_event(
 	struct gpio_event_info **ii;
 	struct gpio_event *ip = input_get_drvdata(dev);
 
+
 	for (devnr = 0; devnr < ip->input_devs->count; devnr++)
 		if (ip->input_devs->dev[devnr] == dev)
 			break;
@@ -47,6 +54,7 @@ static int gpio_input_event(
 		KEY_LOGE("KEY_ERR: %s: unknown device %p\n", __func__, dev);
 		return -EIO;
 	}
+
 
 	for (i = 0, ii = ip->info->info; i < ip->info->info_count; i++, ii++) {
 		if ((*ii)->event) {
@@ -60,11 +68,13 @@ static int gpio_input_event(
 	return ret;
 }
 
+
 static int gpio_event_call_all_func(struct gpio_event *ip, int func)
 {
 	int i;
 	int ret;
 	struct gpio_event_info **ii;
+
 
 	if (func == GPIO_EVENT_FUNC_INIT || func == GPIO_EVENT_FUNC_RESUME) {
 		ii = ip->info->info;
@@ -77,8 +87,6 @@ static int gpio_event_call_all_func(struct gpio_event *ip, int func)
 			}
 			if (func == GPIO_EVENT_FUNC_RESUME && (*ii)->no_suspend)
 				continue;
-			if (func == GPIO_EVENT_FUNC_INIT)
-				(*ii)->rrm1_mode = ip->rrm1_mode;
 			ret = (*ii)->func(ip->input_devs, *ii, &ip->state[i],
 					  func);
 			if (ret) {
@@ -88,6 +96,7 @@ static int gpio_event_call_all_func(struct gpio_event *ip, int func)
 		}
 		return 0;
 	}
+
 
 	ret = 0;
 	i = ip->info->info_count;
@@ -105,6 +114,7 @@ err_no_func:
 	return ret;
 }
 
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 void gpio_event_suspend(struct early_suspend *h)
 {
@@ -113,6 +123,7 @@ void gpio_event_suspend(struct early_suspend *h)
 	gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_SUSPEND);
 	ip->info->power(ip->info, 0);
 }
+
 
 void gpio_event_resume(struct early_suspend *h)
 {
@@ -123,6 +134,7 @@ void gpio_event_resume(struct early_suspend *h)
 }
 #endif
 
+
 static int gpio_event_probe(struct platform_device *pdev)
 {
 	int err;
@@ -131,6 +143,7 @@ static int gpio_event_probe(struct platform_device *pdev)
 	int dev_count = 1;
 	int i;
 	int registered = 0;
+
 
 	event_info = pdev->dev.platform_data;
 	if (event_info == NULL) {
@@ -157,12 +170,6 @@ static int gpio_event_probe(struct platform_device *pdev)
 	ip->input_devs = (void*)&ip->state[event_info->info_count];
 	platform_set_drvdata(pdev, ip);
 
-	if ((get_debug_flag() & DEBUG_FLAG_DISABLE_PMIC_RESET) && event_info->cmcc_disable_reset) {
-		ip->rrm1_mode = 1;
-		KEY_LOGI("Lab Test RRM1 Mode");
-	} else {
-		ip->rrm1_mode = 0;
-	}
 
 	for (i = 0; i < dev_count; i++) {
 		struct input_dev *input_dev = input_allocate_device();
@@ -177,6 +184,12 @@ static int gpio_event_probe(struct platform_device *pdev)
 					event_info->name : event_info->names[i];
 		input_dev->event = gpio_input_event;
 		ip->input_devs->dev[i] = input_dev;
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+		if (!strcmp(input_dev->name, "keypad_8960")) {
+			sweep2wake_setdev(input_dev);
+			printk(KERN_INFO "[sweep2wake]: set device %s\n", input_dev->name);
+		}
+#endif
 	}
 	ip->input_devs->count = dev_count;
 	ip->info = event_info;
@@ -190,9 +203,11 @@ static int gpio_event_probe(struct platform_device *pdev)
 		ip->info->power(ip->info, 1);
 	}
 
+
 	err = gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_INIT);
 	if (err)
 		goto err_call_all_func_failed;
+
 
 	for (i = 0; i < dev_count; i++) {
 		err = input_register_device(ip->input_devs->dev[i]);
@@ -204,7 +219,9 @@ static int gpio_event_probe(struct platform_device *pdev)
 		registered++;
 	}
 
+
 	return 0;
+
 
 err_input_register_device_failed:
 	gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_UNINIT);
@@ -227,10 +244,12 @@ err_kp_alloc_failed:
 	return err;
 }
 
+
 static int gpio_event_remove(struct platform_device *pdev)
 {
 	struct gpio_event *ip = platform_get_drvdata(pdev);
 	int i;
+
 
 	gpio_event_call_all_func(ip, GPIO_EVENT_FUNC_UNINIT);
 	if (ip->info->power) {
@@ -245,6 +264,7 @@ static int gpio_event_remove(struct platform_device *pdev)
 	return 0;
 }
 
+
 static struct platform_driver gpio_event_driver = {
 	.probe		= gpio_event_probe,
 	.remove		= gpio_event_remove,
@@ -253,18 +273,22 @@ static struct platform_driver gpio_event_driver = {
 	},
 };
 
+
 static int __devinit gpio_event_init(void)
 {
 	return platform_driver_register(&gpio_event_driver);
 }
+
 
 static void __exit gpio_event_exit(void)
 {
 	platform_driver_unregister(&gpio_event_driver);
 }
 
+
 module_init(gpio_event_init);
 module_exit(gpio_event_exit);
+
 
 MODULE_DESCRIPTION("GPIO Event Driver");
 MODULE_LICENSE("GPL");
